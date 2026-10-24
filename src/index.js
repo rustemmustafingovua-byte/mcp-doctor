@@ -27,14 +27,17 @@ export function classify(err) {
   return FAILURE.HANDSHAKE
 }
 
-/** Describe a server entry from an OpenCode-style config. */
+/** Describe a server entry from an OpenCode-style config or servers.json fleet file. */
 export function normalizeServer(name, entry) {
   if (typeof entry === "string") return { name, type: "remote", url: entry }
-  if (entry?.url) return { name, type: "remote", url: entry.url, headers: entry.headers }
+  if (entry?.url) return { name: entry.name || name, type: "remote", url: entry.url, headers: entry.headers }
   if (entry?.command) {
-    return { name, type: "local", command: entry.command, args: entry.args, env: entry.env, cwd: entry.cwd }
+    const command = Array.isArray(entry.command)
+      ? [...entry.command, ...(entry.args || [])]
+      : [entry.command, ...(entry.args || [])]
+    return { name: entry.name || name, type: "local", command, args: entry.args, env: entry.env, cwd: entry.cwd }
   }
-  return { name, type: "unknown" }
+  return { name: entry?.name || name, type: "unknown" }
 }
 
 /**
@@ -52,7 +55,7 @@ export async function probe(server, opts = {}) {
       transport = new StreamableHTTPClientTransport(new URL(server.url), {
         requestInit: { headers: server.headers },
       })
-    } else {
+    } else if (server.type === "local") {
       const [command, ...args] = server.command || []
       transport = new StdioClientTransport({
         command,
@@ -61,6 +64,8 @@ export async function probe(server, opts = {}) {
         cwd: server.cwd || process.cwd(),
         stderr: "ignore",
       })
+    } else {
+      throw new Error("invalid server configuration")
     }
     const client = new Client({ name: "mcp-doctor", version: "0.1.0" }, { capabilities: {} })
     const connect = client.connect(transport)
@@ -109,10 +114,17 @@ export async function doctor(servers, opts = {}) {
   }
 }
 
-/** Read servers out of an OpenCode-style config object. */
+/** Read servers out of an OpenCode-style config object or a fleet servers.json file. */
 export function serversFromConfig(config) {
-  const mcp = config?.mcp || {}
-  return Object.entries(mcp)
-    .filter(([, v]) => v && v.enabled !== false)
+  if (!config || typeof config !== "object") return []
+  if (Array.isArray(config)) {
+    return config
+      .filter((v) => v && v.enabled !== false)
+      .map((v, i) => normalizeServer(v?.name || (typeof v === "string" ? v : `server-${i + 1}`), v))
+  }
+  if (Array.isArray(config.servers)) return serversFromConfig(config.servers)
+  const map = config.mcp || config.mcpServers || config.servers || config
+  return Object.entries(map)
+    .filter(([, v]) => v && (typeof v === "string" || (typeof v === "object" && v.enabled !== false)))
     .map(([name, v]) => normalizeServer(name, v))
 }

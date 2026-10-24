@@ -48,6 +48,7 @@ npm i -g https://github.com/rustemmustafingovua-byte/mcp-doctor/releases/downloa
 
 ```bash
 mcp-doctor
+mcp-doctor --servers servers.json
 mcp-doctor --url https://example.com/mcp
 mcp-doctor --json
 ```
@@ -59,10 +60,12 @@ mcp-doctor — Health check for MCP servers.
 
 USAGE
   mcp-doctor                          read ~/.config/opencode/opencode.jsonc
+  mcp-doctor --servers servers.json   probe every server in a JSON file
   mcp-doctor --url https://host/mcp   probe one remote server
   mcp-doctor --cmd "npx -y server"    probe one stdio server
 
 COMMANDS / OPTIONS
+  --servers <file> JSON file of servers to probe
   --config <path>  config file to read
   --url <url>      probe a single remote MCP server
   --cmd <command>  probe a single stdio MCP server
